@@ -54,16 +54,14 @@ img = Image.fromarray(test_img).convert('L')
 fig, ax = plt.subplots(1, 2)
 ax[0].imshow(test_img)
 ax[0].set_title(batch_1_dict[b'labels'][0])
-
+ax[0].grid(False)
 ax[1].imshow(img, cmap="gray")
 ax[1].set_title("Grayscale")
+ax[1].grid(False)
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-: Text(0.5, 1.0, 'Grayscale')
-[[file:./.ob-jupyter/623934aadd1b0dcdc324bf7783e7de668436acb0.png]]
-:END:
+[[file:./.ob-jupyter/a7880a02296adf51a4c2fcb211bc5e46e22bf41d.png]]
 
 Now, to perform k-means clustering, we actually need the images as a single vector, so we can use the data directly without any transformations. Let's perform a simple k-means clustering on this batch of data considering full vectors with red, green, and blue pixel values.
 
@@ -125,7 +123,7 @@ for i in range(ax.shape[0]):
 #+end_src
 
 #+RESULTS:
-[[file:./.ob-jupyter/4f96fb9c2bc528aaf0de2d3db28d0a3c4b2314a2.png]]
+[[file:./.ob-jupyter/5488903327851e47bc9eb863852c5a62589c522d.png]]
 
 
 After all these experimentations, we now need to convert all the images to grayscale so that we can apply SVD to it correctly. To convert all the images to grayscale, we will use the Pillow library as we did in one of the examples above.

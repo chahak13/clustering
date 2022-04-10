@@ -1,0 +1,169 @@
+#+TITLE: Cifar10 Classifier to generate embeddings
+#+AUTHOR: Chahak Mehta
+#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-5154355c-a8c6-412b-a7ef-28588cbde93b.json :async yes :eval no-export :exports both
+
+* Imports
+
+#+begin_src jupyter-python
+import torch
+import torchvision
+import torchvision.transforms as transforms
+#+end_src
+
+#+RESULTS:
+
+* Load CIFAR-10
+
+#+begin_src jupyter-python
+transform = transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+batch_size = 4
+
+trainset = torchvision.datasets.CIFAR10(root='/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py', train=True,
+                                        download=True, transform=transform)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+                                          shuffle=True, num_workers=2)
+
+testset = torchvision.datasets.CIFAR10(root='/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py', train=False,
+                                       download=True, transform=transform)
+testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
+                                         shuffle=False, num_workers=2)
+
+classes = ('plane', 'car', 'bird', 'cat',
+           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: Downloading https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz to /workspace/CHAHAK/dsml/project/data/cifar-10-batches-py/cifar-10-python.tar.gz
+:   0%|          | 0/170498071 [00:00<?, ?it/s]Extracting /workspace/CHAHAK/dsml/project/data/cifar-10-batches-py/cifar-10-python.tar.gz to /workspace/CHAHAK/dsml/project/data/cifar-10-batches-py
+: Files already downloaded and verified
+:END:
+
+* Convolutional Neural Network
+
+#+begin_src jupyter-python
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class Net(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        self.fc1 = nn.Linear(16 * 5 * 5, 120)
+        self.fc2 = nn.Linear(120, 84)
+        self.fc3 = nn.Linear(84, 10)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
+    def embedding(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = torch.flatten(x, 1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return x
+
+net = Net()
+#+end_src
+
+#+RESULTS:
+
+* Loss function and optimizer
+
+#+begin_src jupyter-python
+import torch.optim as optim
+
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+#+end_src
+
+#+RESULTS:
+
+* Training
+
+#+begin_src jupyter-python
+for epoch in range(2):  # loop over the dataset multiple times
+
+    running_loss = 0.0
+    for i, data in enumerate(trainloader, 0):
+        # get the inputs; data is a list of [inputs, labels]
+        inputs, labels = data
+
+        # zero the parameter gradients
+        optimizer.zero_grad()
+
+        # forward + backward + optimize
+        outputs = net(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+        # print statistics
+        running_loss += loss.item()
+        if i % 2000 == 1999:    # print every 2000 mini-batches
+            print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
+            running_loss = 0.0
+
+print('Finished Training')
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[1,  2000] loss: 2.133
+[1,  4000] loss: 1.839
+[1,  6000] loss: 1.685
+[1,  8000] loss: 1.569
+[1, 10000] loss: 1.508
+[1, 12000] loss: 1.437
+[2,  2000] loss: 1.392
+[2,  4000] loss: 1.363
+[2,  6000] loss: 1.334
+[2,  8000] loss: 1.298
+[2, 10000] loss: 1.308
+[2, 12000] loss: 1.268
+Finished Training
+#+end_example
+
+
+** Save model
+
+#+begin_src jupyter-python
+model_path = '/workspace/CHAHAK/dsml/project/data/cifar_trained.pth'
+torch.save(net.state_dict(), model_path)
+#+end_src
+
+#+RESULTS:
+
+* Generate embeddings?
+
+With the new model, we can use the ~net.embedding~ function as that'll give the output of the second last hidden layer.
+
+#+begin_src jupyter-python
+dataiter = iter(trainloader)
+images, labels = dataiter.next()
+
+images.shape
+#+end_src
+
+#+RESULTS:
+: torch.Size([4, 3, 32, 32])
+
+#+begin_src jupyter-python
+net.embedding(images).shape
+#+end_src
+
+#+RESULTS:
+: torch.Size([4, 84])

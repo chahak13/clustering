@@ -1,0 +1,148 @@
+#+TITLE: CIFAR10 clustering with naive CNN embeddings
+#+AUTHOR: Chahak Mehta
+#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-5154355c-a8c6-412b-a7ef-28588cbde93b.json :async yes :eval no-export :exports both
+
+
+* Imports
+
+#+begin_src jupyter-python
+import torch
+import torchvision
+import torchvision.transforms as transforms
+torch.multiprocessing.set_sharing_strategy('file_system')
+#+end_src
+
+#+RESULTS:
+
+* Load PyTorch model
+
+#+begin_src jupyter-python
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class Net(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        self.fc1 = nn.Linear(16 * 5 * 5, 120)
+        self.fc2 = nn.Linear(120, 84)
+        self.fc3 = nn.Linear(84, 10)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = F.relu(self.fc1(x))
+        embedding = F.relu(self.fc2(x))
+        # embedding = x.clone()
+        x = self.fc3(embedding)
+        return x, embedding
+
+    # def embedding(self, x):
+    #     x = self.pool(F.relu(self.conv1(x)))
+    #     x = self.pool(F.relu(self.conv2(x)))
+    #     x = torch.flatten(x, 1)
+    #     x = F.relu(self.fc1(x))
+    #     x = F.relu(self.fc2(x))
+    #     return x
+
+net_state_dict = torch.load("/workspace/CHAHAK/dsml/project/data/cifar_trained.pth")
+net = Net()
+net.load_state_dict(net_state_dict)
+net.eval()
+#+end_src
+
+#+RESULTS:
+: Net(
+:   (conv1): Conv2d(3, 6, kernel_size=(5, 5), stride=(1, 1))
+:   (pool): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+:   (conv2): Conv2d(6, 16, kernel_size=(5, 5), stride=(1, 1))
+:   (fc1): Linear(in_features=400, out_features=120, bias=True)
+:   (fc2): Linear(in_features=120, out_features=84, bias=True)
+:   (fc3): Linear(in_features=84, out_features=10, bias=True)
+: )
+
+* Load CIFAR10 data
+
+#+begin_src jupyter-python
+transform = transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+batch_size = 4
+
+trainset = torchvision.datasets.CIFAR10(root='/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py', train=True,
+                                        download=True, transform=transform)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+                                          shuffle=True, num_workers=2)
+
+testset = torchvision.datasets.CIFAR10(root='/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py', train=False,
+                                       download=True, transform=transform)
+testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
+                                         shuffle=False, num_workers=2)
+
+classes = ('plane', 'car', 'bird', 'cat',
+           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+#+end_src
+
+#+RESULTS:
+: Files already downloaded and verified
+: Files already downloaded and verified
+
+* Clustering with embeddings
+
+** Generate embeddings
+
+#+begin_src jupyter-python
+from tqdm import tqdm
+
+
+embeddings, all_labels = [], []
+for i, data in tqdm(enumerate(testloader, 0)):
+    inputs, labels = data
+    _, emb = net(inputs)
+    embeddings.append(emb.detach().numpy())
+    all_labels.extend(labels)
+#+end_src
+
+#+RESULTS:
+: 2500it [00:04, 623.71it/s]
+
+#+begin_src jupyter-python
+import numpy as np
+
+embedding_array = np.vstack(embeddings)
+embedding_array.shape
+#+end_src
+
+#+RESULTS:
+| 10000 | 84 |
+
+** Clustering (finally!)
+
+#+begin_src jupyter-python
+from sklearn.cluster import KMeans
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import homogeneity_score
+
+kmeans = KMeans(n_clusters=10)
+estimator = make_pipeline(StandardScaler(), kmeans).fit(embedding_array)
+homogeneity_score(all_labels, estimator[-1].labels_)
+#+end_src
+
+#+RESULTS:
+: 0.3543858505490766
+
+#+begin_src jupyter-python
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+_ = ax.hist(estimator[-1].labels_, bins=100)
+#+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/2cd23a59c6d40f2003f6bea5b62d274ab5b9e06b.png]]
