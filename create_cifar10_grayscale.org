@@ -1,0 +1,166 @@
+#+TITLE: Convert Cifar-10 to Grayscale Images
+#+AUTHOR: Chahak Mehta
+#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-5154355c-a8c6-412b-a7ef-28588cbde93b.json :async yes :eval no-export :exports both
+
+For our project, we plan to use the [[https://www.cs.toronto.edu/~kriz/cifar.html][CIFAR-10]] dataset. This is a dataset with 50,000 images of size 32x32. These images are also RGB. To perform the clustering experiments that we plan to do for our experiments, we need to convert these images to grayscale. This can be done using the Pillow library in python. Let's consider the case of converting one image first. During this process, we will also go through parsing the dataset which is 5 pickled files of 10000 images each.
+
+#+begin_src jupyter-python
+import os
+os.getcwd()
+#+end_src
+
+#+RESULTS:
+: /oden/cmehta/Documents/dsml/project
+
+Per the documentation on the CIFAR-10 webpage, each ~data_batch_1~ file is a binary pickled file that has data for 10000 images. It can be unpickled as follows:
+
+#+begin_src jupyter-python
+def unpickle(file):
+    import pickle
+    with open(file, 'rb') as fo:
+        dict = pickle.load(fo, encoding='bytes')
+    return dict
+
+batch_1_dict = unpickle("/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py/data_batch_1")
+batch_1_dict.keys()
+#+end_src
+
+#+RESULTS:
+: dict_keys([b'batch_label', b'labels', b'data', b'filenames'])
+
+#+begin_src jupyter-python
+batch_1_dict[b'data'].shape
+#+end_src
+
+#+RESULTS:
+| 10000 | 3072 |
+
+The ~data~ array is arranged such that each row of the array is a 32x32 colour image divided into red, green, and blue values.
+
+#+begin_src jupyter-python
+import numpy as np
+
+test_img_rgb = batch_1_dict[b'data'][0]
+test_img_r = test_img_rgb[:1024].reshape(32, 32)
+test_img_g = test_img_rgb[1024:2048].reshape(32, 32)
+test_img_b = test_img_rgb[2048:].reshape(32, 32)
+# test_img = test_img_rgb.reshape((3, 32, 32), order='C').T
+test_img = np.stack([test_img_r, test_img_g, test_img_b], axis=-1)
+
+import matplotlib.pyplot as plt
+from PIL import Image
+img = Image.fromarray(test_img).convert('L')
+
+fig, ax = plt.subplots(1, 2)
+ax[0].imshow(test_img)
+ax[0].set_title(batch_1_dict[b'labels'][0])
+
+ax[1].imshow(img, cmap="gray")
+ax[1].set_title("Grayscale")
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: Text(0.5, 1.0, 'Grayscale')
+[[file:./.ob-jupyter/623934aadd1b0dcdc324bf7783e7de668436acb0.png]]
+:END:
+
+Now, to perform k-means clustering, we actually need the images as a single vector, so we can use the data directly without any transformations. Let's perform a simple k-means clustering on this batch of data considering full vectors with red, green, and blue pixel values.
+
+#+begin_src jupyter-python
+from sklearn.cluster import KMeans
+
+kmeans = KMeans(n_clusters=10, random_state=0).fit(batch_1_dict[b'data'])
+kmeans.labels_[:10]
+#+end_src
+
+#+RESULTS:
+: array([8, 9, 7, 0, 7, 4, 2, 2, 3, 4], dtype=int32)
+
+We can now plot the histogram of labels to see the distribution that we get via clustering.
+
+#+begin_src jupyter-python
+import seaborn as sns
+sns.set(style="darkgrid")
+fig, ax = plt.subplots()
+sns.histplot(kmeans.labels_, kde=False, ax=ax)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: <AxesSubplot:ylabel='Count'>
+[[file:./.ob-jupyter/38440825795452204e42b3c72493b1488abf7bef.png]]
+:END:
+
+We see that label 2 has the most elements in its cluster. We'll take a random sample to check what class does that label correspond to.
+
+#+begin_src jupyter-python
+idx = np.where(kmeans.labels_==2)[0]
+cluster_2_labels = np.array(batch_1_dict[b'labels'])[idx]
+
+sns.histplot(cluster_2_labels, bins=10, kde=False)
+
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: <AxesSubplot:ylabel='Count'>
+[[file:./.ob-jupyter/077bd7f639394ea5ed17cb8fbf7ac978542e6124.png]]
+:END:
+
+#+begin_src jupyter-python
+rng = np.random.default_rng()
+sample = rng.choice(idx, 9)
+
+fig, ax = plt.subplots(3, 3, figsize=(15, 15))
+for i in range(ax.shape[0]):
+    for j in range(ax.shape[1]):
+        img_rgb = batch_1_dict[b'data'][sample[i * ax.shape[1] + j]]
+        img_r = img_rgb[:1024].reshape(32, 32)
+        img_g = img_rgb[1024:2048].reshape(32, 32)
+        img_b = img_rgb[2048:].reshape(32, 32)
+        img = np.stack([img_r, img_g, img_b], axis=-1)
+        ax[i][j].imshow(img)
+        ax[i][j].grid(False)
+#+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/4f96fb9c2bc528aaf0de2d3db28d0a3c4b2314a2.png]]
+
+
+After all these experimentations, we now need to convert all the images to grayscale so that we can apply SVD to it correctly. To convert all the images to grayscale, we will use the Pillow library as we did in one of the examples above.
+
+#+begin_src jupyter-python
+from copy import deepcopy
+from tqdm import tqdm
+
+batch_1_grayscale = deepcopy(batch_1_dict)
+batch_1_grayscale[b'data'] = np.zeros((10000, 32, 32))
+for i, img in tqdm(enumerate(batch_1_dict[b'data'])):
+    img_r = img[:1024].reshape(32, 32)
+    img_g = img[1024:2048].reshape(32, 32)
+    img_b = img[2048:].reshape(32, 32)
+    img_rgb = np.stack([img_r, img_g, img_b], axis=-1)
+    gray = Image.fromarray(img_rgb).convert('L')
+    batch_1_grayscale[b'data'][i] = np.asarray(gray)
+#+end_src
+
+#+RESULTS:
+: 10000it [00:00, 18956.27it/s]
+
+#+begin_src jupyter-python
+batch_1_grayscale[b'data'].shape
+#+end_src
+
+#+RESULTS:
+| 10000 | 32 | 32 |
+
+We'll store this data as a pickle file for easier usage in future.
+
+#+begin_src jupyter-python
+import pickle
+
+pickle.dump(batch_1_grayscale, open("/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py/gray_data_batch_1.pkl", "wb"))
+#+end_src
+
+#+RESULTS:
