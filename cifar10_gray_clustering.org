@@ -1,6 +1,6 @@
 #+TITLE: CIFAR-10 Clustering of Grayscale images
 #+AUTHOR: Chahak Mehta
-#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-5154355c-a8c6-412b-a7ef-28588cbde93b.json :async yes :eval no-export :exports both
+#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-5154355c-a8c6-412b-a7ef-28588cbde93b.json :async yes :eval no-export :exports both :tangle cifar10_gray_clustering.py
 
 We have generated grayscale CIFAR-10 images and stored them in pickle files. As of now, we've done 1 batch of 10000 images.
 

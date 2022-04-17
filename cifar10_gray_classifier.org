@@ -1,6 +1,6 @@
-#+TITLE: Cifar10 Classifier to generate embeddings
+#+TITLE: Cifar10 Grayscale Classifier
 #+AUTHOR: Chahak Mehta
-#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-5154355c-a8c6-412b-a7ef-28588cbde93b.json :async yes :eval no-export :exports both
+#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-39dbe229-8570-4dd9-84ad-46080017bdea.json :async yes :eval no-export :exports both :tangle cifar10_gray_classifier.py
 
 * Imports
 
@@ -11,13 +11,13 @@ import torchvision.transforms as transforms
 #+end_src
 
 #+RESULTS:
-
 * Load CIFAR-10
 
 #+begin_src jupyter-python
 transform = transforms.Compose(
     [transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+     transforms.Grayscale(num_output_channels=1),
+     transforms.Normalize((0.5), (0.5))])
 
 batch_size = 4
 
@@ -36,11 +36,37 @@ classes = ('plane', 'car', 'bird', 'cat',
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-: Downloading https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz to /workspace/CHAHAK/dsml/project/data/cifar-10-batches-py/cifar-10-python.tar.gz
-:   0%|          | 0/170498071 [00:00<?, ?it/s]Extracting /workspace/CHAHAK/dsml/project/data/cifar-10-batches-py/cifar-10-python.tar.gz to /workspace/CHAHAK/dsml/project/data/cifar-10-batches-py
 : Files already downloaded and verified
-:END:
+: Files already downloaded and verified
+
+Checking some random images
+
+#+begin_src jupyter-python
+import matplotlib.pyplot as plt
+import numpy as np
+
+# functions to show an image
+def imshow(img):
+    img = img / 2 + 0.5     # unnormalize
+    npimg = img.numpy()
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.imshow(npimg.squeeze(), cmap="gray")
+    ax.grid(False)
+
+# get some random training images
+dataiter = iter(trainloader)
+images, labels = dataiter.next()
+
+# show images
+imshow(images[0])
+# print labels
+# print(' '.join(f'{classes[labels[j]]:5s}' for j in range(batch_size)))
+#+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/d63d6b94e17b10655de4d4de9d321d6e968b9ebb.png]]
+
+
 
 * Convolutional Neural Network
 
@@ -49,10 +75,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class Net(nn.Module):
+class GrayNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.conv1 = nn.Conv2d(1, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
@@ -87,17 +113,16 @@ class Net(nn.Module):
 import torch.optim as optim
 
 criterion = nn.CrossEntropyLoss()
+net = GrayNet()
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-net = Net()
 
 
-for epoch in range(2):  # loop over the dataset multiple times
+for epoch in range(5):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # get the inputs; data is a list of [inputs, labels]
         inputs, labels = data
-
         # zero the parameter gradients
         optimizer.zero_grad()
 
@@ -118,18 +143,36 @@ print('Finished Training')
 
 #+RESULTS:
 #+begin_example
-[1,  2000] loss: 1.346
-[1,  4000] loss: 1.332
-[1,  6000] loss: 1.307
-[1,  8000] loss: 1.260
-[1, 10000] loss: 1.278
-[1, 12000] loss: 1.237
-[2,  2000] loss: 1.185
-[2,  4000] loss: 1.171
-[2,  6000] loss: 1.158
-[2,  8000] loss: 1.168
-[2, 10000] loss: 1.142
-[2, 12000] loss: 1.149
+[1,  2000] loss: 2.285
+[1,  4000] loss: 2.154
+[1,  6000] loss: 1.947
+[1,  8000] loss: 1.793
+[1, 10000] loss: 1.689
+[1, 12000] loss: 1.644
+[2,  2000] loss: 1.565
+[2,  4000] loss: 1.552
+[2,  6000] loss: 1.515
+[2,  8000] loss: 1.506
+[2, 10000] loss: 1.469
+[2, 12000] loss: 1.427
+[3,  2000] loss: 1.367
+[3,  4000] loss: 1.370
+[3,  6000] loss: 1.366
+[3,  8000] loss: 1.348
+[3, 10000] loss: 1.331
+[3, 12000] loss: 1.317
+[4,  2000] loss: 1.242
+[4,  4000] loss: 1.237
+[4,  6000] loss: 1.248
+[4,  8000] loss: 1.225
+[4, 10000] loss: 1.236
+[4, 12000] loss: 1.230
+[5,  2000] loss: 1.134
+[5,  4000] loss: 1.151
+[5,  6000] loss: 1.162
+[5,  8000] loss: 1.166
+[5, 10000] loss: 1.144
+[5, 12000] loss: 1.149
 Finished Training
 #+end_example
 
@@ -137,29 +180,8 @@ Finished Training
 ** Save model
 
 #+begin_src jupyter-python
-model_path = '/workspace/CHAHAK/dsml/project/data/cifar_trained.pth'
+model_path = '/workspace/CHAHAK/dsml/project/data/cifar_grayscale_trained.pth'
 torch.save(net.state_dict(), model_path)
 #+end_src
 
 #+RESULTS:
-
-* Generate embeddings?
-
-With the new model, we can use the ~net.embedding~ function as that'll give the output of the second last hidden layer.
-
-#+begin_src jupyter-python
-dataiter = iter(trainloader)
-images, labels = dataiter.next()
-
-images.shape
-#+end_src
-
-#+RESULTS:
-: torch.Size([4, 3, 32, 32])
-
-#+begin_src jupyter-python
-net.embedding(images).shape
-#+end_src
-
-#+RESULTS:
-: torch.Size([4, 84])

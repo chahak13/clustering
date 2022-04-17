@@ -1,23 +1,11 @@
-#+TITLE: Cifar10 Classifier to generate embeddings
-#+AUTHOR: Chahak Mehta
-#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-5154355c-a8c6-412b-a7ef-28588cbde93b.json :async yes :eval no-export :exports both
-
-* Imports
-
-#+begin_src jupyter-python
 import torch
 import torchvision
 import torchvision.transforms as transforms
-#+end_src
 
-#+RESULTS:
-
-* Load CIFAR-10
-
-#+begin_src jupyter-python
 transform = transforms.Compose(
     [transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+     transforms.Grayscale(num_output_channels=1),
+     transforms.Normalize((0.5), (0.5))])
 
 batch_size = 4
 
@@ -33,26 +21,35 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
 
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-#+end_src
 
-#+RESULTS:
-:RESULTS:
-: Downloading https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz to /workspace/CHAHAK/dsml/project/data/cifar-10-batches-py/cifar-10-python.tar.gz
-:   0%|          | 0/170498071 [00:00<?, ?it/s]Extracting /workspace/CHAHAK/dsml/project/data/cifar-10-batches-py/cifar-10-python.tar.gz to /workspace/CHAHAK/dsml/project/data/cifar-10-batches-py
-: Files already downloaded and verified
-:END:
+import matplotlib.pyplot as plt
+import numpy as np
 
-* Convolutional Neural Network
+# functions to show an image
+def imshow(img):
+    img = img / 2 + 0.5     # unnormalize
+    npimg = img.numpy()
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.imshow(npimg.squeeze(), cmap="gray")
+    ax.grid(False)
 
-#+begin_src jupyter-python
+# get some random training images
+dataiter = iter(trainloader)
+images, labels = dataiter.next()
+
+# show images
+imshow(images[0])
+# print labels
+# print(' '.join(f'{classes[labels[j]]:5s}' for j in range(batch_size)))
+
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-class Net(nn.Module):
+class GrayNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.conv1 = nn.Conv2d(1, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
@@ -77,27 +74,19 @@ class Net(nn.Module):
     #     x = F.relu(self.fc2(x))
     #     return x
 
-#+end_src
-
-#+RESULTS:
-
-* Loss function and optimizer, and Training
-
-#+begin_src jupyter-python
 import torch.optim as optim
 
 criterion = nn.CrossEntropyLoss()
+net = GrayNet()
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-net = Net()
 
 
-for epoch in range(2):  # loop over the dataset multiple times
+for epoch in range(5):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # get the inputs; data is a list of [inputs, labels]
         inputs, labels = data
-
         # zero the parameter gradients
         optimizer.zero_grad()
 
@@ -114,52 +103,6 @@ for epoch in range(2):  # loop over the dataset multiple times
             running_loss = 0.0
 
 print('Finished Training')
-#+end_src
 
-#+RESULTS:
-#+begin_example
-[1,  2000] loss: 1.346
-[1,  4000] loss: 1.332
-[1,  6000] loss: 1.307
-[1,  8000] loss: 1.260
-[1, 10000] loss: 1.278
-[1, 12000] loss: 1.237
-[2,  2000] loss: 1.185
-[2,  4000] loss: 1.171
-[2,  6000] loss: 1.158
-[2,  8000] loss: 1.168
-[2, 10000] loss: 1.142
-[2, 12000] loss: 1.149
-Finished Training
-#+end_example
-
-
-** Save model
-
-#+begin_src jupyter-python
-model_path = '/workspace/CHAHAK/dsml/project/data/cifar_trained.pth'
+model_path = '/workspace/CHAHAK/dsml/project/data/cifar_grayscale_trained.pth'
 torch.save(net.state_dict(), model_path)
-#+end_src
-
-#+RESULTS:
-
-* Generate embeddings?
-
-With the new model, we can use the ~net.embedding~ function as that'll give the output of the second last hidden layer.
-
-#+begin_src jupyter-python
-dataiter = iter(trainloader)
-images, labels = dataiter.next()
-
-images.shape
-#+end_src
-
-#+RESULTS:
-: torch.Size([4, 3, 32, 32])
-
-#+begin_src jupyter-python
-net.embedding(images).shape
-#+end_src
-
-#+RESULTS:
-: torch.Size([4, 84])

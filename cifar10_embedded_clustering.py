@@ -1,22 +1,8 @@
-#+TITLE: CIFAR10 clustering with naive CNN embeddings
-#+AUTHOR: Chahak Mehta
-#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-39dbe229-8570-4dd9-84ad-46080017bdea.json :async yes :eval no-export :exports both :tangle cifar10_embedded_clustering.py
-
-
-* Imports
-
-#+begin_src jupyter-python
 import torch
 import torchvision
 import torchvision.transforms as transforms
 torch.multiprocessing.set_sharing_strategy('file_system')
-#+end_src
 
-#+RESULTS:
-
-* Load PyTorch model
-
-#+begin_src jupyter-python
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -73,21 +59,7 @@ net_state_dict = torch.load("/workspace/CHAHAK/dsml/project/data/cifar_grayscale
 net = GrayNet()
 net.load_state_dict(net_state_dict)
 net.eval()
-#+end_src
 
-#+RESULTS:
-: GrayNet(
-:   (conv1): Conv2d(1, 6, kernel_size=(5, 5), stride=(1, 1))
-:   (pool): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
-:   (conv2): Conv2d(6, 16, kernel_size=(5, 5), stride=(1, 1))
-:   (fc1): Linear(in_features=400, out_features=120, bias=True)
-:   (fc2): Linear(in_features=120, out_features=84, bias=True)
-:   (fc3): Linear(in_features=84, out_features=10, bias=True)
-: )
-
-* Load CIFAR10 data
-
-#+begin_src jupyter-python
 transform = transforms.Compose(
     [transforms.ToTensor(),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
@@ -111,17 +83,7 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
 
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-#+end_src
 
-#+RESULTS:
-: Files already downloaded and verified
-: Files already downloaded and verified
-
-* Clustering with embeddings
-
-** Generate embeddings
-
-#+begin_src jupyter-python
 from tqdm import tqdm
 
 
@@ -131,24 +93,12 @@ for i, data in tqdm(enumerate(testloader, 0)):
     _, emb = net(inputs)
     embeddings.append(emb.detach().numpy())
     all_labels.extend(labels)
-#+end_src
 
-#+RESULTS:
-: 2500it [00:04, 596.06it/s]
-
-#+begin_src jupyter-python
 import numpy as np
 
 embedding_array = np.vstack(embeddings)
 embedding_array.shape
-#+end_src
 
-#+RESULTS:
-| 10000 | 84 |
-
-** Clustering (finally!)
-
-#+begin_src jupyter-python
 from sklearn.cluster import KMeans
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -157,21 +107,8 @@ from sklearn.metrics import homogeneity_score
 kmeans = KMeans(n_clusters=10)
 estimator = make_pipeline(StandardScaler(), kmeans).fit(embedding_array)
 homogeneity_score(all_labels, estimator[-1].labels_)
-#+end_src
 
-#+RESULTS:
-: 0.3093263679356939
-
-
-+RESULTS:
-: 0.3543858505490766
-
-#+begin_src jupyter-python
 import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots()
 _ = ax.hist(estimator[-1].labels_, bins=100)
-#+end_src
-
-#+RESULTS:
-[[file:./.ob-jupyter/2cd23a59c6d40f2003f6bea5b62d274ab5b9e06b.png]]
