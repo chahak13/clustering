@@ -1,0 +1,385 @@
+#+TITLE: CIFAR10 clustering using autoencoder embeddings
+#+AUTHOR: Chahak Mehta
+#+property: header-args :session /ssh:pho-sach:/oden/cmehta/.local/share/jupyter/runtime/kernel-96bcf6cd-f993-4ded-97f9-46a219fc42a7.json :async yes :eval no-export :exports both :tangle cifar10_autoencoder.py
+
+* Imports
+
+#+begin_src jupyter-python
+import torch
+import torch.nn as nn
+import torchvision
+import torchvision.transforms as transforms
+torch.multiprocessing.set_sharing_strategy('file_system')
+#+end_src
+
+#+RESULTS:
+
+* Load CIFAR10 data
+
+#+begin_src jupyter-python
+from functools import partial
+
+def compress_img(img, k):
+    U, D, V = torch.linalg.svd(img, full_matrices=False)
+    compressed_img = torch.matmul(U[..., :k], torch.diag_embed(D[..., :k]))
+    compressed_img = torch.matmul(compressed_img, V[..., :k, :])
+    return compressed_img
+
+transform = transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+linear_grayscale_transform = transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Grayscale(num_output_channels=1),
+     transforms.Normalize((0.5), (0.5)),
+     transforms.Lambda(lambda x: torch.flatten(x, start_dim=1))])
+
+cnn_grayscale_transform = transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Grayscale(num_output_channels=1),
+     transforms.Normalize((0.5), (0.5))])
+
+batch_size = 50
+
+trainset = torchvision.datasets.CIFAR10(root='/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py', train=True,
+                                        download=True, transform=transform)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+                                          shuffle=True, num_workers=2)
+
+testset = torchvision.datasets.CIFAR10(root='/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py', train=False,
+                                       download=True, transform=transform)
+testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
+                                         shuffle=False, num_workers=2)
+
+classes = ('plane', 'car', 'bird', 'cat',
+           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+#+end_src
+
+#+RESULTS:
+: Files already downloaded and verified
+: Files already downloaded and verified
+
+* Linear Autoencoder training
+
+#+begin_src jupyter-python
+from tqdm import tqdm
+# from networks import GrayLinearAutoencoder
+class GrayLinearAutoencoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(1024, 512),
+            nn.ReLU(True),
+            nn.Linear(512, 128),
+            nn.ReLU(True),
+            nn.Linear(128, 64),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(64, 128),
+            nn.ReLU(True),
+            nn.Linear(128, 512),
+            nn.ReLU(True),
+            nn.Linear(512, 1024),
+            nn.Tanh(),
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)
+        x = self.decoder(x)
+        return x
+
+
+epochs = 5
+import torch.optim as optim
+
+criterion = nn.MSELoss()
+net = GrayLinearAutoencoder()
+optimizer = optim.Adam(net.parameters(), lr=0.001, amsgrad=True)
+
+
+for epoch in range(epochs):  # loop over the dataset multiple times
+
+    running_loss = 0.0
+    for i, data in tqdm(enumerate(trainloader, 0)):
+        # get the inputs; data is a list of [inputs, labels]
+        inputs, labels = data
+        # zero the parameter gradients
+        optimizer.zero_grad()
+
+        # forward + backward + optimize
+        outputs = net(inputs)
+        loss = criterion(outputs, inputs)
+        loss.backward()
+        optimizer.step()
+
+        # print statistics
+        running_loss += loss.item()
+        if i % 2000 == 1999:    # print every 2000 mini-batches
+            tqdm.write(f'[{epoch + 1}, {i + 1:5d}] loss: {loss.item():.3f}')
+            running_loss = 0.0
+
+print('Finished Training')
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: 0it [00:00, ?it/s]
+# [goto error]
+#+begin_example
+---------------------------------------------------------------------------
+RuntimeError                              Traceback (most recent call last)
+Input In [26], in <cell line: 36>()
+     43 optimizer.zero_grad()
+     45 # forward + backward + optimize
+---> 46 outputs = net(inputs)
+     47 loss = criterion(outputs, inputs)
+     48 loss.backward()
+
+File /workspace/CHAHAK/miniconda3/envs/dsml/lib/python3.9/site-packages/torch/nn/modules/module.py:1110, in Module._call_impl(self, *input, **kwargs)
+   1106 # If we don't have any hooks, we want to skip the rest of the logic in
+   1107 # this function, and just call forward.
+   1108 if not (self._backward_hooks or self._forward_hooks or self._forward_pre_hooks or _global_backward_hooks
+   1109         or _global_forward_hooks or _global_forward_pre_hooks):
+-> 1110     return forward_call(*input, **kwargs)
+   1111 # Do not call functions when jit is used
+   1112 full_backward_hooks, non_full_backward_hooks = [], []
+
+Input In [26], in GrayLinearAutoencoder.forward(self, x)
+     22 def forward(self, x):
+---> 23     x = self.encoder(x)
+     24     x = self.decoder(x)
+     25     return x
+
+File /workspace/CHAHAK/miniconda3/envs/dsml/lib/python3.9/site-packages/torch/nn/modules/module.py:1110, in Module._call_impl(self, *input, **kwargs)
+   1106 # If we don't have any hooks, we want to skip the rest of the logic in
+   1107 # this function, and just call forward.
+   1108 if not (self._backward_hooks or self._forward_hooks or self._forward_pre_hooks or _global_backward_hooks
+   1109         or _global_forward_hooks or _global_forward_pre_hooks):
+-> 1110     return forward_call(*input, **kwargs)
+   1111 # Do not call functions when jit is used
+   1112 full_backward_hooks, non_full_backward_hooks = [], []
+
+File /workspace/CHAHAK/miniconda3/envs/dsml/lib/python3.9/site-packages/torch/nn/modules/container.py:141, in Sequential.forward(self, input)
+    139 def forward(self, input):
+    140     for module in self:
+--> 141         input = module(input)
+    142     return input
+
+File /workspace/CHAHAK/miniconda3/envs/dsml/lib/python3.9/site-packages/torch/nn/modules/module.py:1110, in Module._call_impl(self, *input, **kwargs)
+   1106 # If we don't have any hooks, we want to skip the rest of the logic in
+   1107 # this function, and just call forward.
+   1108 if not (self._backward_hooks or self._forward_hooks or self._forward_pre_hooks or _global_backward_hooks
+   1109         or _global_forward_hooks or _global_forward_pre_hooks):
+-> 1110     return forward_call(*input, **kwargs)
+   1111 # Do not call functions when jit is used
+   1112 full_backward_hooks, non_full_backward_hooks = [], []
+
+File /workspace/CHAHAK/miniconda3/envs/dsml/lib/python3.9/site-packages/torch/nn/modules/linear.py:103, in Linear.forward(self, input)
+    102 def forward(self, input: Tensor) -> Tensor:
+--> 103     return F.linear(input, self.weight, self.bias)
+
+RuntimeError: mat1 and mat2 shapes cannot be multiplied (4800x32 and 1024x512)
+#+end_example
+:END:
+* CNN Autoencoder training
+
+#+begin_src jupyter-python
+from tqdm import tqdm
+
+class GrayCNNAutoencoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.encoder = nn.Sequential(
+            nn.Conv2d(
+                in_channels=3,      # input height
+                out_channels=16,    # n_filters
+                kernel_size=3,      # filter size
+                stride=1,           # filter movement/step
+                padding=1,
+            ),
+            nn.LeakyReLU(),    # activation
+            nn.Conv2d(
+                in_channels=16,      # input height
+                out_channels=32,    # n_filters
+                kernel_size=3,      # filter size
+                stride=1,           # filter movement/step
+                padding=1,
+            ),
+            nn.LeakyReLU(),    # activation
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(
+                in_channels=32,      # input height
+                out_channels=32,    # n_filters
+                kernel_size=5,      # filter size
+                stride=1,           # filter movement/step
+                padding=2,
+            ),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.
+        )
+
+        self.decoder = nn.Sequential(
+                nn.ConvTranspose2d(
+                in_channels=64,      # input height
+                out_channels=32,    # n_filters
+                kernel_size=2,      # filter size
+                stride=2,           # filter movement/step
+                padding=0,
+            ),
+            nn.LeakyReLU(),       # activation
+            nn.Conv2d(
+                in_channels=32,      # input height
+                out_channels=32,    # n_filters
+                kernel_size=5,      # filter size
+                stride=1,           # filter movement/step
+                padding=2,
+            ),
+            nn.LeakyReLU(),    # activation
+           nn.ConvTranspose2d(
+                in_channels=32,      # input height
+                out_channels=16,    # n_filters
+                kernel_size=5,      # filter size
+                stride=1,           # filter movement/step
+                padding=2,
+            ),
+            nn.Conv2d(
+                in_channels=16,      # input height
+                out_channels=16,    # n_filters
+                kernel_size=5,      # filter size
+                stride=1,           # filter movement/step
+                padding=2,
+            ),
+            nn.LeakyReLU(),    # activation
+             nn.ConvTranspose2d(
+                in_channels=16,      # input height
+                out_channels=16,    # n_filters
+                kernel_size=2,      # filter size
+                stride=2,           # filter movement/step
+                padding=0,
+            ),
+            nn.LeakyReLU(),
+            nn.Conv2d(
+                in_channels=16,      # input height
+                out_channels=16,    # n_filters
+                kernel_size=3,      # filter size
+                stride=1,           # filter movement/step
+                padding=1,
+            ),
+            nn.LeakyReLU(),    # activation
+           nn.ConvTranspose2d(
+                in_channels=16,      # input height
+                out_channels=3,    # n_filters
+                kernel_size=5,      # filter size
+                stride=1,           # filter movement/step
+                padding=2,
+            ),
+            nn.Conv2d(
+                in_channels=3,      # input height
+                out_channels=3,    # n_filters
+                kernel_size=3,      # filter size
+                stride=1,           # filter movement/step
+                padding=1,
+            ),
+            nn.ReLU(), # activation
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)
+        x = self.decoder(x)
+        return x
+
+
+epochs = 2
+import torch.optim as optim
+
+criterion = nn.L1Loss()
+net = GrayCNNAutoencoder()
+optimizer = optim.Adam(net.parameters(), lr=0.001, amsgrad=True)
+
+
+for epoch in range(epochs):  # loop over the dataset multiple times
+
+    running_loss = 0.0
+    for i, data in tqdm(enumerate(trainloader, 0)):
+        # get the inputs; data is a list of [inputs, labels]
+        inputs, labels = data
+        # zero the parameter gradients
+        optimizer.zero_grad()
+
+        # forward + backward + optimize
+        outputs = net(inputs)
+        loss = criterion(outputs, inputs)
+        loss.backward()
+        optimizer.step()
+
+        # print statistics
+        running_loss += loss.item()
+        if i % 2000 == 1999:    # print every 2000 mini-batches
+            tqdm.write(f'[{epoch + 1}, {i + 1:5d}] loss: {loss.item():.3f}')
+            running_loss = 0.0
+
+print('Finished Training')
+#+end_src
+
+#+RESULTS:
+: 1000it [03:04,  5.43it/s]
+: 1000it [03:05,  5.39it/s]Finished Training
+
+
+* Generate embedding vectors for each image
+
+#+begin_src jupyter-python
+net.eval()
+embeddings, all_labels = [], []
+for i, data in tqdm(enumerate(testloader, 0)):
+    inputs, labels = data
+    emb = net.encoder(inputs)
+    #embeddings.append(emb.detach().numpy())
+    #all_labels.extend(labels)
+    print(emb.shape)
+    break
+#+end_src
+
+#+RESULTS:
+: 0it [00:00, ?it/s]
+: torch.Size([50, 64, 8, 8])
+
+#+begin_src jupyter-python
+import numpy as np
+
+embedding_array = np.vstack(embeddings).squeeze()
+embedding_array.shape
+#+end_src
+
+#+RESULTS:
+| 10000 | 64 |
+
+* Clustering
+
+#+begin_src jupyter-python
+from sklearn.cluster import KMeans
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import homogeneity_score
+
+kmeans = KMeans(n_clusters=10)
+estimator = make_pipeline(StandardScaler(), kmeans).fit(embedding_array)
+homogeneity_score(all_labels, estimator[-1].labels_)
+#+end_src
+
+#+RESULTS:
+: 0.028351969189971342
+
+
+#+begin_src jupyter-python
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+_ = ax.hist(estimator[-1].labels_, bins=100)
+#+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/9202fcf1f0a289e12e9500a6cf53b07b735be818.png]]

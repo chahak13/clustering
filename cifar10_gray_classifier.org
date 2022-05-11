@@ -14,20 +14,34 @@ import torchvision.transforms as transforms
 * Load CIFAR-10
 
 #+begin_src jupyter-python
+from functools import partial
+
+def compress_img(img, k):
+    U, D, V = torch.linalg.svd(img, full_matrices=False)
+    compressed_img = torch.matmul(U[..., :k], torch.diag_embed(D[..., :k]))
+    compressed_img = torch.matmul(compressed_img, V[..., :k, :])
+    return compressed_img
+
 transform = transforms.Compose(
     [transforms.ToTensor(),
      transforms.Grayscale(num_output_channels=1),
      transforms.Normalize((0.5), (0.5))])
 
+svd_transform = transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Grayscale(num_output_channels=1),
+     transforms.Lambda(partial(compress_img, k=5)),
+     transforms.Normalize((0.5), (0.5))])
+
 batch_size = 4
 
 trainset = torchvision.datasets.CIFAR10(root='/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py', train=True,
-                                        download=True, transform=transform)
+                                        download=True, transform=svd_transform)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
                                           shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR10(root='/workspace/CHAHAK/dsml/project/data/cifar-10-batches-py', train=False,
-                                       download=True, transform=transform)
+                                       download=True, transform=svd_transform)
 testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                                          shuffle=False, num_workers=2)
 
@@ -38,6 +52,19 @@ classes = ('plane', 'car', 'bird', 'cat',
 #+RESULTS:
 : Files already downloaded and verified
 : Files already downloaded and verified
+
+Confirming SVD tranformation
+#+begin_src jupyter-python
+from functools import partial
+
+dataiter = iter(trainloader)
+images, labels = dataiter.next()
+svdtrans = transforms.Lambda(partial(compress_img, k=5))
+svdtrans(images).shape
+#+end_src
+
+#+RESULTS:
+: torch.Size([4, 1, 32, 32])
 
 Checking some random images
 
@@ -64,7 +91,7 @@ imshow(images[0])
 #+end_src
 
 #+RESULTS:
-[[file:./.ob-jupyter/d63d6b94e17b10655de4d4de9d321d6e968b9ebb.png]]
+[[file:./.ob-jupyter/d706ffee298f3bb3d354e8db40554918929feded.png]]
 
 
 
@@ -94,15 +121,6 @@ class GrayNet(nn.Module):
         # embedding = x.clone()
         x = self.fc3(embedding)
         return x, embedding
-
-    # def embedding(self, x):
-    #     x = self.pool(F.relu(self.conv1(x)))
-    #     x = self.pool(F.relu(self.conv2(x)))
-    #     x = torch.flatten(x, 1)
-    #     x = F.relu(self.fc1(x))
-    #     x = F.relu(self.fc2(x))
-    #     return x
-
 #+end_src
 
 #+RESULTS:
@@ -143,36 +161,63 @@ print('Finished Training')
 
 #+RESULTS:
 #+begin_example
-[1,  2000] loss: 2.285
-[1,  4000] loss: 2.154
-[1,  6000] loss: 1.947
-[1,  8000] loss: 1.793
-[1, 10000] loss: 1.689
-[1, 12000] loss: 1.644
-[2,  2000] loss: 1.565
-[2,  4000] loss: 1.552
-[2,  6000] loss: 1.515
-[2,  8000] loss: 1.506
-[2, 10000] loss: 1.469
-[2, 12000] loss: 1.427
-[3,  2000] loss: 1.367
-[3,  4000] loss: 1.370
-[3,  6000] loss: 1.366
-[3,  8000] loss: 1.348
-[3, 10000] loss: 1.331
-[3, 12000] loss: 1.317
-[4,  2000] loss: 1.242
-[4,  4000] loss: 1.237
-[4,  6000] loss: 1.248
-[4,  8000] loss: 1.225
-[4, 10000] loss: 1.236
-[4, 12000] loss: 1.230
-[5,  2000] loss: 1.134
-[5,  4000] loss: 1.151
-[5,  6000] loss: 1.162
-[5,  8000] loss: 1.166
-[5, 10000] loss: 1.144
-[5, 12000] loss: 1.149
+[1, 10000] loss: 1.706
+[1, 12000] loss: 1.665
+[2,  2000] loss: 1.598
+[2,  4000] loss: 1.567
+[2,  6000] loss: 1.528
+[2,  8000] loss: 1.511
+[2, 10000] loss: 1.503
+[2, 12000] loss: 1.481
+[3,  2000] loss: 1.396
+[3,  4000] loss: 1.398
+[3,  6000] loss: 1.409
+[3,  8000] loss: 1.372
+[3, 10000] loss: 1.386
+[3, 12000] loss: 1.374
+[4,  2000] loss: 1.286
+[4,  4000] loss: 1.283
+[4,  6000] loss: 1.292
+[4,  8000] loss: 1.314
+[4, 10000] loss: 1.279
+[4, 12000] loss: 1.290
+[5,  2000] loss: 1.204
+[5,  4000] loss: 1.216
+[5,  6000] loss: 1.214
+[5,  8000] loss: 1.228
+[5, 10000] loss: 1.227
+[5, 12000] loss: 1.224
+Finished Training
+[1,  2000] loss: 2.249
+[1,  4000] loss: 2.054
+[1,  6000] loss: 1.903
+[1,  8000] loss: 1.775
+[1, 10000] loss: 1.726
+[1, 12000] loss: 1.667
+[2,  2000] loss: 1.593
+[2,  4000] loss: 1.587
+[2,  6000] loss: 1.560
+[2,  8000] loss: 1.544
+[2, 10000] loss: 1.533
+[2, 12000] loss: 1.498
+[3,  2000] loss: 1.445
+[3,  4000] loss: 1.425
+[3,  6000] loss: 1.426
+[3,  8000] loss: 1.415
+[3, 10000] loss: 1.415
+[3, 12000] loss: 1.422
+[4,  2000] loss: 1.332
+[4,  4000] loss: 1.331
+[4,  6000] loss: 1.343
+[4,  8000] loss: 1.332
+[4, 10000] loss: 1.348
+[4, 12000] loss: 1.335
+[5,  2000] loss: 1.248
+[5,  4000] loss: 1.275
+[5,  6000] loss: 1.270
+[5,  8000] loss: 1.277
+[5, 10000] loss: 1.269
+[5, 12000] loss: 1.270
 Finished Training
 #+end_example
 
@@ -180,7 +225,7 @@ Finished Training
 ** Save model
 
 #+begin_src jupyter-python
-model_path = '/workspace/CHAHAK/dsml/project/data/cifar_grayscale_trained.pth'
+model_path = '/workspace/CHAHAK/dsml/project/data/cifar_grayscale_svd_trained.pth'
 torch.save(net.state_dict(), model_path)
 #+end_src
 

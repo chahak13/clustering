@@ -1,0 +1,7 @@
+#+TITLE: Todo
+
+* Tasks
+- [X] Add custom transform to apply SVD on images during DataLoader.
+- [ ] Check (H/)DBSCAN
+- [ ] Autoencoders for embedding
+- [ ] Swav/DeepDPM with CIFAR-10

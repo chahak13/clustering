@@ -99,7 +99,37 @@ class ColorCNNAutoencoder(nn.Module):
             nn.MaxPool2d(2, 2),
             nn.Conv2d(6, 16, 5),
             nn.ReLU(True),
-            nn.MacPool2d(2, 2),
+            nn.MaxPool2d(2, 2),
+            nn.Linear(16 * 5 * 5, 120),
+            nn.ReLU(True),
+            nn.Linear(120, 64),
+        )
+
+        self.decoder = nn.Sequential(
+            nn.Linear(64, 120),
+            nn.ReLU(True),
+            nn.Linear(120, 16 * 5 * 5),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(16, 6, 5),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(6, 3, 5),
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)
+        x = self.decoder(x)
+        return x
+
+class GrayCNNAutoencoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 6, 5),
+            nn.ReLU(True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(6, 16, 5),
+            nn.ReLU(True),
+            nn.MaxPool2d(2, 2),
             nn.Linear(16 * 5 * 5, 120),
             nn.ReLU(True),
             nn.Linear(120, 64),
